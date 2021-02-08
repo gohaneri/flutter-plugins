@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "660426225752",
+    "project_id": "fitplugin",
+    "storage_bucket": "fitplugin.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:660426225752:android:6a3b7954937049a179722d",
+        "android_client_info": {
+          "package_name": "cachet.plugins.health_example"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "660426225752-kct3f6u0nfgc3esl1vds42d7b3j7jf94.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "cachet.plugins.health_example",
+            "certificate_hash": "766dd71c2e1da1008ee89dcf6ee4bc4627e5a976"
+          }
+        },
+        {
+          "client_id": "660426225752-dhgaafd1iccqgda2bvc2v10ec3gbt9i3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCcOGZMlCIJQ-fUIPUS3DFP-4WxV_wLQkE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "660426225752-dhgaafd1iccqgda2bvc2v10ec3gbt9i3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -29,13 +29,16 @@ class _MyAppState extends State<MyApp> {
   Future<void> fetchData() async {
     /// Get everything from midnight until now
     DateTime startDate = DateTime(2020, 11,   07, 0,  0,  0);
-    DateTime endDate = DateTime(2020,   11,   07, 23, 59, 59);
+    DateTime endDate = DateTime.now();
 
     HealthFactory health = HealthFactory();
 
     /// Define the types to get.
     List<HealthDataType> types = [
       HealthDataType.STEPS,
+      HealthDataType.SLEEP_IN_BED,
+      HealthDataType.SLEEP_ASLEEP,
+      HealthDataType.SLEEP_AWAKE,
       HealthDataType.WEIGHT,
       HealthDataType.HEIGHT,
       HealthDataType.BLOOD_GLUCOSE,
@@ -60,6 +63,8 @@ class _MyAppState extends State<MyApp> {
       } catch (e) {
         print("Caught exception in getHealthDataFromTypes: $e");
       }
+
+      print("data size ${_healthDataList.length}");
 
       /// Filter out duplicates
       _healthDataList = HealthFactory.removeDuplicates(_healthDataList);
