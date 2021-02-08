@@ -178,6 +178,7 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
         val unit = getUnit(type)
 
         if (dataType == DataType.TYPE_SLEEP_SEGMENT) {
+            Log.d("FLUTTER_HEALTH", "Sleep data type")
             /// Start a new thread for doing a GoogleFit data lookup - using a Sessions Client
             thread {
                 try {
@@ -238,7 +239,6 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
                             }
                         }
                     }
-
                     activity.runOnUiThread { result.success(healthData) }
                 } catch (e3: Exception) {
                     activity.runOnUiThread { result.success(null) }
@@ -246,8 +246,8 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
             }
 
 
-        }
-        else {
+        } else {
+            Log.d("FLUTTER_HEALTH", "Other data type")
             /// Start a new thread for doing a GoogleFit data lookup - using a Fitness History Client
             thread {
                 try {

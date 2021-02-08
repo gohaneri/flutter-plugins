@@ -35,14 +35,14 @@ class _MyAppState extends State<MyApp> {
 
     /// Define the types to get.
     List<HealthDataType> types = [
-      HealthDataType.STEPS,
+      // HealthDataType.STEPS,
       HealthDataType.SLEEP_IN_BED,
       HealthDataType.SLEEP_ASLEEP,
       HealthDataType.SLEEP_AWAKE,
-      HealthDataType.WEIGHT,
-      HealthDataType.HEIGHT,
-      HealthDataType.BLOOD_GLUCOSE,
-      HealthDataType.DISTANCE_WALKING_RUNNING,
+      // HealthDataType.WEIGHT,
+      // HealthDataType.HEIGHT,
+      // HealthDataType.BLOOD_GLUCOSE,
+      // HealthDataType.DISTANCE_WALKING_RUNNING,
     ];
 
     setState(() => _state = AppState.FETCHING_DATA);
