@@ -169,7 +169,6 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
 
     /// Called when the "getHealthDataByType" is invoked from Flutter
     private fun getData(call: MethodCall, result: Result) {
-        Log.e("FLUTTER_HEALTH", "getData")
         val type = call.argument<String>("dataTypeKey")!!
         val startTime = call.argument<Long>("startDate")!!
         val endTime = call.argument<Long>("endDate")!!
@@ -179,7 +178,6 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
         val unit = getUnit(type)
 
         if (dataType == DataType.TYPE_SLEEP_SEGMENT) {
-            Log.e("FLUTTER_HEALTH", "type sleep")
             /// Start a new thread for doing a GoogleFit data lookup - using a Sessions Client
             thread {
                 try {
@@ -196,7 +194,6 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
                             .readSessionsFromAllApps()
                             .build()
 
-                    Log.e("FLUTTER_HEALTH", "request session")
                     val response =  Fitness.getSessionsClient(activity.applicationContext, googleSignInAccount)
                             .readSession(request)
 
@@ -241,42 +238,6 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
                             }
                         }
                     }
-
-//                    val healthData : MutableList<HashMap<String,Any>> = mutableListOf()
-//
-//                    for (session in sessions) {
-//                        Log.e("FLUTTER_HEALTH", "sessions")
-//                        val sessionStart = session.getStartTime(TimeUnit.MILLISECONDS)
-//                        val sessionEnd = session.getEndTime(TimeUnit.MILLISECONDS)
-//                        Log.d("FLUTTER_HEALTH", "Sleep between $sessionStart and $sessionEnd")
-//                        response.result?.getDataSet(session)?.let { dataSets ->
-//                            for (dataSet in dataSets) {
-//                                Log.e("FLUTTER_HEALTH", "dataSet")
-//                                Log.d("FLUTTER_HEALTH", "${dataSet.dataPoints}")
-//                                for (dataPoint in dataSet.dataPoints) {
-//                                    Log.e("FLUTTER_HEALTH", "dataPoint")
-//                                    Log.d("FLUTTER_HEALTH", "$dataPoint")
-//                                    val sleepStageOrdinal = dataPoint.getValue(Field.FIELD_SLEEP_SEGMENT_TYPE).asInt()
-//                                    //val sleepStage = SLEEP_STAGES[sleepStageOrdinal]
-//                                    Log.e("FLUTTER_HEALTH", "$sleepStageOrdinal")
-//                                    // Currently filtering only on the SLEEP stage
-//                                    if (sleepStageOrdinal == SleepStages.SLEEP) {
-//                                        val startDateTime = dataPoint.getStartTime(TimeUnit.MILLISECONDS)
-//                                        val endDateTime = dataPoint.getEndTime(TimeUnit.MILLISECONDS)
-//                                        val durationMillis = endDateTime - startDateTime
-//
-//                                        healthData.add(hashMapOf(
-//                                                "value" to durationMillis,
-//                                                "date_from" to startDateTime,
-//                                                "date_to" to endDateTime,
-//                                                "unit" to unit.toString()
-//                                        ))
-//                                    }
-//                                }
-//                            }
-//
-//                        }
-//                    }
 
                     activity.runOnUiThread { result.success(healthData) }
                 } catch (e3: Exception) {
