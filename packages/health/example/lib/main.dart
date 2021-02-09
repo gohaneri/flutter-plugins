@@ -37,8 +37,8 @@ class _MyAppState extends State<MyApp> {
     List<HealthDataType> types = [
       HealthDataType.STEPS,
       HealthDataType.SLEEP_IN_BED,
-      HealthDataType.SLEEP_ASLEEP,
-      HealthDataType.SLEEP_AWAKE,
+      // HealthDataType.SLEEP_ASLEEP,
+      // HealthDataType.SLEEP_AWAKE,
       // HealthDataType.WEIGHT,
       // HealthDataType.HEIGHT,
       // HealthDataType.BLOOD_GLUCOSE,
@@ -51,7 +51,6 @@ class _MyAppState extends State<MyApp> {
     bool accessWasGranted = await health.requestAuthorization(types);
 
     int steps = 0;
-    double sleep = 0;
 
     if (accessWasGranted) {
       try {
@@ -74,13 +73,10 @@ class _MyAppState extends State<MyApp> {
 
         if (x.type == HealthDataType.STEPS) {
           steps += (x.value as int);
-        } else if (x.type == HealthDataType.SLEEP_AWAKE || x.type == HealthDataType.SLEEP_IN_BED || x.type == HealthDataType.SLEEP_ASLEEP) {
-          sleep += (x.value as double);
         }
       });
 
       print("Steps: $steps");
-      print("Sleep minutes: $sleep");
 
       /// Update the UI to display the results
       setState(() {

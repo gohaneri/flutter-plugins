@@ -19,6 +19,7 @@ import io.flutter.plugin.common.PluginRegistry.ActivityResultListener
 import android.content.Intent
 import android.os.Handler
 import android.util.Log
+import com.google.android.gms.fitness.FitnessActivities
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 import java.text.DateFormat
@@ -205,38 +206,50 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
 
                     sessions.forEach { session ->
                         response.result?.getDataSet(session)?.let { dataSets ->
-                            dataSets.forEach { dataSet ->
-                                dataSet.dataPoints.forEach { point ->
+
+                            //Log.d("FLUTTER_HEALTH", "$session")
+
+                            healthData.add(hashMapOf(
+                                    "value" to (session.getEndTime(TimeUnit.MILLISECONDS) - session.getStartTime(TimeUnit.MILLISECONDS)),
+                                    "date_from" to session.getStartTime(TimeUnit.MILLISECONDS),
+                                    "date_to" to session.getEndTime(TimeUnit.MILLISECONDS),
+                                    "unit" to unit.toString()
+                            ))
+
+//                            dataSets.forEach { dataSet ->
+//                                dataSet.dataPoints.forEach { point ->
 //                                    val sleepStageVal = point.getValue(Field.FIELD_SLEEP_SEGMENT_TYPE).asInt()
-                                    val segmentStart = point.getStartTime(TimeUnit.MILLISECONDS)
-                                    val segmentEnd = point.getEndTime(TimeUnit.MILLISECONDS)
-                                    val durationMillis = segmentEnd - segmentStart
-
-                                    healthData.add(hashMapOf(
-                                            "value" to durationMillis,
-                                            "date_from" to segmentStart,
-                                            "date_to" to segmentEnd,
-                                            "unit" to unit.toString()
-                                    ))
-
-//                                    when (sleepStageVal){
-//                                        SleepStages.SLEEP -> {
-//                                            val segmentStart = point.getStartTime(TimeUnit.MILLISECONDS)
-//                                            val segmentEnd = point.getEndTime(TimeUnit.MILLISECONDS)
-//                                            val durationMillis = segmentEnd - segmentStart
+//                                    val segmentStart = point.getStartTime(TimeUnit.MILLISECONDS)
+//                                    val segmentEnd = point.getEndTime(TimeUnit.MILLISECONDS)
+//                                    val durationMillis = segmentEnd - segmentStart
 //
-//                                            healthData.add(hashMapOf(
-//                                                    "value" to durationMillis,
-//                                                    "date_from" to segmentStart,
-//                                                    "date_to" to segmentEnd,
-//                                                    "unit" to unit.toString()
-//                                            ))
-//                                        }
-//                                        SleepStages.AWAKE -> {}
-//                                        SleepStages.SLEEP_LIGHT -> {}
-//                                    }
-                                }
-                            }
+//
+//
+//                                    healthData.add(hashMapOf(
+//                                            "value" to durationMillis,
+//                                            "date_from" to segmentStart,
+//                                            "date_to" to segmentEnd,
+//                                            "unit" to unit.toString()
+//                                    ))
+//
+////                                    when (sleepStageVal){
+////                                        SleepStages.SLEEP -> {
+////                                            val segmentStart = point.getStartTime(TimeUnit.MILLISECONDS)
+////                                            val segmentEnd = point.getEndTime(TimeUnit.MILLISECONDS)
+////                                            val durationMillis = segmentEnd - segmentStart
+////
+////                                            healthData.add(hashMapOf(
+////                                                    "value" to durationMillis,
+////                                                    "date_from" to segmentStart,
+////                                                    "date_to" to segmentEnd,
+////                                                    "unit" to unit.toString()
+////                                            ))
+////                                        }
+////                                        SleepStages.AWAKE -> {}
+////                                        SleepStages.SLEEP_LIGHT -> {}
+////                                    }
+//                                }
+//                            }
                         }
                     }
                     activity.runOnUiThread { result.success(healthData) }
@@ -318,6 +331,18 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
             "requestAuthorization" -> requestAuthorization(call, result)
             "getData" -> getData(call, result)
             else -> result.notImplemented()
+        }
+    }
+
+    // because this value is private field in Session
+    fun Session.getValue(): Int {
+        return when (this.activity) {
+            FitnessActivities.SLEEP -> 72
+            FitnessActivities.SLEEP_LIGHT -> 109
+            FitnessActivities.SLEEP_DEEP -> 110
+            FitnessActivities.SLEEP_REM -> 111
+            FitnessActivities.SLEEP_AWAKE -> 112
+            else -> throw Exception("session ${this.activity} is not supported")
         }
     }
 }
