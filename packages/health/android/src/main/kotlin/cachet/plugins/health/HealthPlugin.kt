@@ -283,10 +283,12 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
                                 "date_to" to dataPoint.getEndTime(TimeUnit.MILLISECONDS),
                                 "unit" to unit.toString()
                         )
-
                     }
+
+                    Log.d("FLUTTER_HEALTH", "Other data type size ${healthData.size}")
                     activity.runOnUiThread { result.success(healthData) }
                 } catch (e3: Exception) {
+                    Log.d("FLUTTER_HEALTH", "Other data type error $e3")
                     activity.runOnUiThread { result.success(null) }
                 }
             }
