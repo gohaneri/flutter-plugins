@@ -35,7 +35,7 @@ class _MyAppState extends State<MyApp> {
 
     /// Define the types to get.
     List<HealthDataType> types = [
-      // HealthDataType.STEPS,
+      HealthDataType.STEPS,
       HealthDataType.SLEEP_IN_BED,
       HealthDataType.SLEEP_ASLEEP,
       HealthDataType.SLEEP_AWAKE,
@@ -51,6 +51,7 @@ class _MyAppState extends State<MyApp> {
     bool accessWasGranted = await health.requestAuthorization(types);
 
     int steps = 0;
+    double sleep = 0;
 
     if (accessWasGranted) {
       try {
@@ -64,18 +65,22 @@ class _MyAppState extends State<MyApp> {
         print("Caught exception in getHealthDataFromTypes: $e");
       }
 
-      print("data size ${_healthDataList.length}");
-
       /// Filter out duplicates
       _healthDataList = HealthFactory.removeDuplicates(_healthDataList);
 
       /// Print the results
       _healthDataList.forEach((x) {
         print("Data point: $x");
-        steps += (x.value as int);
+
+        if (x.type == HealthDataType.STEPS) {
+          steps += (x.value as int);
+        } else if (x.type == HealthDataType.SLEEP_AWAKE || x.type == HealthDataType.SLEEP_IN_BED || x.type == HealthDataType.SLEEP_ASLEEP) {
+          sleep += (x.value as double);
+        }
       });
 
       print("Steps: $steps");
+      print("Sleep minutes: $sleep");
 
       /// Update the UI to display the results
       setState(() {
