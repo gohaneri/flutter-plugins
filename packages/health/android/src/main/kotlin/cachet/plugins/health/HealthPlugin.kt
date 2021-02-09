@@ -254,11 +254,10 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
                     }
                     activity.runOnUiThread { result.success(healthData) }
                 } catch (e3: Exception) {
+                    Log.d("FLUTTER_HEALTH", "$e3")
                     activity.runOnUiThread { result.success(null) }
                 }
             }
-
-
         } else {
             Log.d("FLUTTER_HEALTH", "Other data type")
             /// Start a new thread for doing a GoogleFit data lookup - using a Fitness History Client
@@ -284,11 +283,9 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
                                 "unit" to unit.toString()
                         )
                     }
-
-                    Log.d("FLUTTER_HEALTH", "Other data type size ${healthData.size}")
                     activity.runOnUiThread { result.success(healthData) }
                 } catch (e3: Exception) {
-                    Log.d("FLUTTER_HEALTH", "Other data type error $e3")
+                    Log.d("FLUTTER_HEALTH", "$e3")
                     activity.runOnUiThread { result.success(null) }
                 }
             }
