@@ -112,7 +112,7 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
 
             guard let samples = samplesOrNil as? [HKQuantitySample] else {
                 guard let samplesCategory = samplesOrNil as? [HKCategorySample] else {
-                    result(FlutterError(code: "FlutterHealth", message: "Results are null", details: "\(error)"))
+                    result(FlutterError(code: "FlutterHealth", message: "Results are null", details: "\(error!)"))
                     return
                 }
                 print(samplesCategory)
@@ -212,7 +212,7 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
             dataTypesDict[SLEEP_IN_BED] = HKSampleType.categoryType(forIdentifier: .sleepAnalysis)!
             dataTypesDict[SLEEP_ASLEEP] = HKSampleType.categoryType(forIdentifier: .sleepAnalysis)!
             dataTypesDict[SLEEP_AWAKE] = HKSampleType.categoryType(forIdentifier: .sleepAnalysis)!
-            dataTypesDict[MOVE_MINUTES] = HKSampleType.quantityType(forIdentifier: .appleMoveTime)!
+            dataTypesDict[MOVE_MINUTES] = HKSampleType.quantityType(forIdentifier: .appleExerciseTime)!
 
             healthDataTypes = Array(dataTypesDict.values)
         }
