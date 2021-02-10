@@ -40,6 +40,7 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
     let SLEEP_IN_BED = "SLEEP_IN_BED"
     let SLEEP_ASLEEP = "SLEEP_ASLEEP"
     let SLEEP_AWAKE = "SLEEP_AWAKE"
+    let MOVE_MINUTES = "MOVE_MINUTES"
 
 
     public static func register(with registrar: FlutterPluginRegistrar) {
@@ -182,6 +183,7 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
         unitDict[SLEEP_IN_BED] = HKUnit.init(from: "")
         unitDict[SLEEP_ASLEEP] = HKUnit.init(from: "")
         unitDict[SLEEP_AWAKE] = HKUnit.init(from: "")
+        unitDict[MOVE_MINUTES] = HKUnit.init(from: "")
 
         // Set up iOS 11 specific types (ordinary health data types)
         if #available(iOS 11.0, *) { 
@@ -210,6 +212,7 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
             dataTypesDict[SLEEP_IN_BED] = HKSampleType.categoryType(forIdentifier: .sleepAnalysis)!
             dataTypesDict[SLEEP_ASLEEP] = HKSampleType.categoryType(forIdentifier: .sleepAnalysis)!
             dataTypesDict[SLEEP_AWAKE] = HKSampleType.categoryType(forIdentifier: .sleepAnalysis)!
+            dataTypesDict[MOVE_MINUTES] = HKSampleType.quantityType(forIdentifier: .appleMoveTime)!
 
             healthDataTypes = Array(dataTypesDict.values)
         }

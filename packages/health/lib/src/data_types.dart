@@ -59,6 +59,7 @@ const List<HealthDataType> _dataTypeKeysIOS = [
   HealthDataType.WAIST_CIRCUMFERENCE,
   HealthDataType.WALKING_HEART_RATE,
   HealthDataType.WEIGHT,
+  HealthDataType.MOVE_MINUTES,
   HealthDataType.FLIGHTS_CLIMBED,
   HealthDataType.DISTANCE_WALKING_RUNNING,
   HealthDataType.MINDFULNESS,
