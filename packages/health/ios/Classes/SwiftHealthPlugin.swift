@@ -6,9 +6,12 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
 
     let healthStore = HKHealthStore()
     var healthDataTypes = [HKObjectType]()
+    var sleepHealthDataTypes = [HKObjectType]()
     var heartRateEventTypes = Set<HKObjectType>()
     var allDataTypes = Set<HKObjectType>()
-    var dataTypesDict: [String: HKQuantityType] = [:]
+    var sleepDataTypes = Set<HKObjectType>()
+    var quantityDataTypesDict: [String: HKQuantityType] = [:]
+    var categoryDataTypesDict: [String: HKCategoryType] = [:]
     var unitDict: [String: HKUnit] = [:]
 
     // Health Data Type Keys
@@ -64,7 +67,8 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
 
         /// Handle getData
         else if (call.method.elementsEqual("getData")){
-            getData(call: call, result: result)
+            getQuantityData(call: call, result: result)
+            getCategoryData(call: call, result: result)
         }
     }
 
@@ -93,7 +97,70 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
         }
     }
 
-    func getData(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    func getQuantityData(call: FlutterMethodCall, result: @escaping FlutterResult) {
+        let arguments = call.arguments as? NSDictionary
+        let dataTypeKey = (arguments?["dataTypeKey"] as? String) ?? "DEFAULT"
+        let startDate = (arguments?["startDate"] as? NSNumber) ?? 0
+        let endDate = (arguments?["endDate"] as? NSNumber) ?? 0
+
+        // Convert dates from milliseconds to Date()
+        let dateFrom = Date(timeIntervalSince1970: startDate.doubleValue / 1000)
+        let dateTo = Date(timeIntervalSince1970: endDate.doubleValue / 1000)
+
+        let dataType = dataTypeLookUp(key: dataTypeKey)
+        let predicate = HKQuery.predicateForSamples(withStart: dateFrom, end: dateTo, options: .strictStartDate)
+
+        var interval = DateComponents()
+        interval.day = 1
+
+        let query = HKStatisticsCollectionQuery(quantityType: dataType, quantitySamplePredicate: predicate, options: [.cumulativeSum], anchorDate: dateFrom as Date, intervalComponents:interval)
+
+        query.initialResultsHandler = { query, results, error in
+            if error != nil {
+                result(FlutterError(code: "FlutterHealth", message: "Results are null", details: "\(error!)"))
+                return
+            }
+
+            if let r = results {
+                var data = [NSDictionary]()
+                r.statistics().forEach({s in
+
+                    if let v = s.sumQuantity() {
+
+                        if v.is(compatibleWith: HKUnit.count()) {
+
+                            data.append([
+                                "uuid": "\(UUID())",
+                                "value": v.doubleValue(for: HKUnit.count()),
+                                "date_from": Int(s.startDate.timeIntervalSince1970 * 1000),
+                                "date_to": Int(s.endDate.timeIntervalSince1970 * 1000),
+                            ])
+
+                        }
+
+                        if v.is(compatibleWith: HKUnit.minute()){
+
+                            data.append([
+                                "uuid": "\(UUID())",
+                                "value": v.doubleValue(for: HKUnit.minute()),
+                                "date_from": Int(s.startDate.timeIntervalSince1970 * 1000),
+                                "date_to": Int(s.endDate.timeIntervalSince1970 * 1000),
+                            ])
+
+                        }
+
+                    }
+
+                })
+                result(data)
+                return
+            }
+        }
+
+        HKHealthStore().execute(query)
+    }
+
+    func getCategoryData(call: FlutterMethodCall, result: @escaping FlutterResult) {
         let arguments = call.arguments as? NSDictionary
         let dataTypeKey = (arguments?["dataTypeKey"] as? String) ?? "DEFAULT"
         let startDate = (arguments?["startDate"] as? NSNumber) ?? 0
@@ -106,57 +173,7 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
         let dataType = dataTypeLookUp(key: dataTypeKey)
         let predicate = HKQuery.predicateForSamples(withStart: dateFrom, end: dateTo, options: .strictStartDate)
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: true)
-        var interval = DateComponents()
-                interval.day = 1
 
-        let query = HKStatisticsCollectionQuery(quantityType: dataType, quantitySamplePredicate: predicate, options: [.cumulativeSum], anchorDate: dateFrom as Date, intervalComponents:interval)
-
-        query.initialResultsHandler = { query, results, error in
-                if error != nil {
-                    result(FlutterError(code: "FlutterHealth", message: "Results are null", details: "\(error!)"))
-                    return
-                }
-
-                if let r = results {
-                    var data = [NSDictionary]()
-                    r.statistics().forEach({s in
-
-                        if let v = s.sumQuantity() {
-
-                           if v.is(compatibleWith: HKUnit.count()) {
-
-                                data.append([
-                                    "uuid": "\(UUID())",
-                                    "value": v.doubleValue(for: HKUnit.count()),
-                                    "date_from": Int(s.startDate.timeIntervalSince1970 * 1000),
-                                    "date_to": Int(s.endDate.timeIntervalSince1970 * 1000),
-                                ])
-
-                           }
-
-                            if v.is(compatibleWith: HKUnit.minute()){
-
-                                data.append([
-                                    "uuid": "\(UUID())",
-                                    "value": v.doubleValue(for: HKUnit.minute()),
-                                    "date_from": Int(s.startDate.timeIntervalSince1970 * 1000),
-                                    "date_to": Int(s.endDate.timeIntervalSince1970 * 1000),
-                                ])
-
-                            }
-
-                        }
-
-                    })
-                    print(data)
-                    result(data)
-                    return
-                }
-            }
-
-            HKHealthStore().execute(query)
-
-        /*
         let query = HKSampleQuery(sampleType: dataType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sortDescriptor]) {
             x, samplesOrNil, error in
 
@@ -165,7 +182,7 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
                     result(FlutterError(code: "FlutterHealth", message: "Results are null", details: "\(error!)"))
                     return
                 }
-                print(samplesCategory)
+
                 result(samplesCategory.map { sample -> NSDictionary in
                     let unit = self.unitLookUp(key: dataTypeKey)
 
@@ -190,8 +207,8 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
             })
             return
         }
+
         HKHealthStore().execute(query)
- */
     }
 
     func unitLookUp(key: String) -> HKUnit {
@@ -202,7 +219,7 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
     }
 
     func dataTypeLookUp(key: String) -> HKQuantityType {
-        guard let dataType_ = dataTypesDict[key] else {
+        guard let dataType_ = quantityDataTypesDict[key] else {
             return HKObjectType.quantityType(forIdentifier: .stepCount)!
         }
         return dataType_
@@ -238,51 +255,52 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
 
         // Set up iOS 11 specific types (ordinary health data types)
         if #available(iOS 11.0, *) {
-            dataTypesDict[ACTIVE_ENERGY_BURNED] = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!
-            dataTypesDict[BASAL_ENERGY_BURNED] = HKObjectType.quantityType(forIdentifier: .basalEnergyBurned)!
-            dataTypesDict[BLOOD_GLUCOSE] = HKObjectType.quantityType(forIdentifier: .bloodGlucose)!
-            dataTypesDict[BLOOD_OXYGEN] = HKObjectType.quantityType(forIdentifier: .oxygenSaturation)!
-            dataTypesDict[BLOOD_PRESSURE_DIASTOLIC] = HKObjectType.quantityType(forIdentifier: .bloodPressureDiastolic)!
-            dataTypesDict[BLOOD_PRESSURE_SYSTOLIC] = HKObjectType.quantityType(forIdentifier: .bloodPressureSystolic)!
-            dataTypesDict[BODY_FAT_PERCENTAGE] = HKObjectType.quantityType(forIdentifier: .bodyFatPercentage)!
-            dataTypesDict[BODY_MASS_INDEX] = HKObjectType.quantityType(forIdentifier: .bodyMassIndex)!
-            dataTypesDict[BODY_TEMPERATURE] = HKObjectType.quantityType(forIdentifier: .bodyTemperature)!
-            dataTypesDict[ELECTRODERMAL_ACTIVITY] = HKObjectType.quantityType(forIdentifier: .electrodermalActivity)!
-            dataTypesDict[HEART_RATE] = HKObjectType.quantityType(forIdentifier: .heartRate)!
-            dataTypesDict[HEART_RATE_VARIABILITY_SDNN] = HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!
-            dataTypesDict[HEIGHT] = HKObjectType.quantityType(forIdentifier: .height)!
-            dataTypesDict[RESTING_HEART_RATE] = HKObjectType.quantityType(forIdentifier: .restingHeartRate)!
-            dataTypesDict[STEPS] = HKObjectType.quantityType(forIdentifier: .stepCount)!
-            dataTypesDict[WAIST_CIRCUMFERENCE] = HKObjectType.quantityType(forIdentifier: .waistCircumference)!
-            dataTypesDict[WALKING_HEART_RATE] = HKObjectType.quantityType(forIdentifier: .walkingHeartRateAverage)!
-            dataTypesDict[WEIGHT] = HKObjectType.quantityType(forIdentifier: .bodyMass)!
-            dataTypesDict[DISTANCE_WALKING_RUNNING] = HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)!
-            dataTypesDict[FLIGHTS_CLIMBED] = HKObjectType.quantityType(forIdentifier: .flightsClimbed)!
-            dataTypesDict[WATER] = HKObjectType.quantityType(forIdentifier: .dietaryWater)!
-            //dataTypesDict[MINDFULNESS] = HKObjectType.categoryType(forIdentifier: .mindfulSession)!
-            //dataTypesDict[SLEEP_IN_BED] = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
-            //dataTypesDict[SLEEP_ASLEEP] = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
-            //dataTypesDict[SLEEP_AWAKE] = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
-            dataTypesDict[MOVE_MINUTES] = HKObjectType.quantityType(forIdentifier: .appleExerciseTime)!
+            quantityDataTypesDict[ACTIVE_ENERGY_BURNED] = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!
+            quantityDataTypesDict[BASAL_ENERGY_BURNED] = HKObjectType.quantityType(forIdentifier: .basalEnergyBurned)!
+            quantityDataTypesDict[BLOOD_GLUCOSE] = HKObjectType.quantityType(forIdentifier: .bloodGlucose)!
+            quantityDataTypesDict[BLOOD_OXYGEN] = HKObjectType.quantityType(forIdentifier: .oxygenSaturation)!
+            quantityDataTypesDict[BLOOD_PRESSURE_DIASTOLIC] = HKObjectType.quantityType(forIdentifier: .bloodPressureDiastolic)!
+            quantityDataTypesDict[BLOOD_PRESSURE_SYSTOLIC] = HKObjectType.quantityType(forIdentifier: .bloodPressureSystolic)!
+            quantityDataTypesDict[BODY_FAT_PERCENTAGE] = HKObjectType.quantityType(forIdentifier: .bodyFatPercentage)!
+            quantityDataTypesDict[BODY_MASS_INDEX] = HKObjectType.quantityType(forIdentifier: .bodyMassIndex)!
+            quantityDataTypesDict[BODY_TEMPERATURE] = HKObjectType.quantityType(forIdentifier: .bodyTemperature)!
+            quantityDataTypesDict[ELECTRODERMAL_ACTIVITY] = HKObjectType.quantityType(forIdentifier: .electrodermalActivity)!
+            quantityDataTypesDict[HEART_RATE] = HKObjectType.quantityType(forIdentifier: .heartRate)!
+            quantityDataTypesDict[HEART_RATE_VARIABILITY_SDNN] = HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!
+            quantityDataTypesDict[HEIGHT] = HKObjectType.quantityType(forIdentifier: .height)!
+            quantityDataTypesDict[RESTING_HEART_RATE] = HKObjectType.quantityType(forIdentifier: .restingHeartRate)!
+            quantityDataTypesDict[STEPS] = HKObjectType.quantityType(forIdentifier: .stepCount)!
+            quantityDataTypesDict[WAIST_CIRCUMFERENCE] = HKObjectType.quantityType(forIdentifier: .waistCircumference)!
+            quantityDataTypesDict[WALKING_HEART_RATE] = HKObjectType.quantityType(forIdentifier: .walkingHeartRateAverage)!
+            quantityDataTypesDict[WEIGHT] = HKObjectType.quantityType(forIdentifier: .bodyMass)!
+            quantityDataTypesDict[DISTANCE_WALKING_RUNNING] = HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)!
+            quantityDataTypesDict[FLIGHTS_CLIMBED] = HKObjectType.quantityType(forIdentifier: .flightsClimbed)!
+            quantityDataTypesDict[WATER] = HKObjectType.quantityType(forIdentifier: .dietaryWater)!
+            categoryDataTypesDict[MINDFULNESS] = HKObjectType.categoryType(forIdentifier: .mindfulSession)!
+            categoryDataTypesDict[SLEEP_IN_BED] = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
+            categoryDataTypesDict[SLEEP_ASLEEP] = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
+            categoryDataTypesDict[SLEEP_AWAKE] = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
+            quantityDataTypesDict[MOVE_MINUTES] = HKObjectType.quantityType(forIdentifier: .appleExerciseTime)!
 
-            healthDataTypes = Array(dataTypesDict.values)
+            healthDataTypes = Array(quantityDataTypesDict.values)
+            sleepHealthDataTypes = Array(categoryDataTypesDict.values)
         }
         // Set up heart rate data types specific to the apple watch, requires iOS 12
-        /*
+
         if #available(iOS 12.2, *){
-            dataTypesDict[HIGH_HEART_RATE_EVENT] = HKObjectType.categoryType(forIdentifier: .highHeartRateEvent)!
-            dataTypesDict[LOW_HEART_RATE_EVENT] = HKObjectType.categoryType(forIdentifier: .lowHeartRateEvent)!
-            dataTypesDict[IRREGULAR_HEART_RATE_EVENT] = HKObjectType.categoryType(forIdentifier: .irregularHeartRhythmEvent)!
+            categoryDataTypesDict[HIGH_HEART_RATE_EVENT] = HKObjectType.categoryType(forIdentifier: .highHeartRateEvent)!
+            categoryDataTypesDict[LOW_HEART_RATE_EVENT] = HKObjectType.categoryType(forIdentifier: .lowHeartRateEvent)!
+            categoryDataTypesDict[IRREGULAR_HEART_RATE_EVENT] = HKObjectType.categoryType(forIdentifier: .irregularHeartRhythmEvent)!
 
             heartRateEventTypes =  Set([
                 HKObjectType.categoryType(forIdentifier: .highHeartRateEvent)!,
                 HKObjectType.categoryType(forIdentifier: .lowHeartRateEvent)!,
                 HKObjectType.categoryType(forIdentifier: .irregularHeartRhythmEvent)!,
-                ])
+            ])
         }
-        */
+
 
         // Concatenate heart events and health data types (both may be empty)
-        allDataTypes = Set(heartRateEventTypes + healthDataTypes)
+        allDataTypes = Set(heartRateEventTypes + healthDataTypes + sleepHealthDataTypes)
     }
 }
