@@ -180,7 +180,6 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
 
         if (dataType == DataType.TYPE_SLEEP_SEGMENT) {
             Log.d("FLUTTER_HEALTH", "Sleep data type")
-            /// Start a new thread for doing a GoogleFit data lookup - using a Sessions Client
             thread {
                 try {
 
@@ -190,24 +189,20 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
                     val request = SessionReadRequest.Builder()
                             .read(DataType.TYPE_SLEEP_SEGMENT)
                             .setTimeInterval(startTime, endTime, TimeUnit.MILLISECONDS)
-                            // By default, only activity sessions are included, so it is necessary to explicitly
-                            // request sleep sessions. This will cause activity sessions to be *excluded*.
                             .includeSleepSessions()
                             .readSessionsFromAllApps()
                             .build()
 
-                    val response =  Fitness.getSessionsClient(activity.applicationContext, googleSignInAccount)
+                    val response = Fitness.getSessionsClient(activity.applicationContext, googleSignInAccount)
                             .readSession(request)
 
                     // Get a list of the sessions that match the criteria to check the result.
                     val sessions: List<Session> = Tasks.await<SessionReadResponse>(response).sessions
 
-                    val healthData : MutableList<HashMap<String,Any>> = mutableListOf()
+                    val healthData: MutableList<HashMap<String, Any>> = mutableListOf()
 
                     sessions.forEach { session ->
                         response.result?.getDataSet(session)?.let { dataSets ->
-
-                            //Log.d("FLUTTER_HEALTH", "$session")
 
                             healthData.add(hashMapOf(
                                     "value" to (session.getEndTime(TimeUnit.MILLISECONDS) - session.getStartTime(TimeUnit.MILLISECONDS)),
@@ -215,41 +210,6 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
                                     "date_to" to session.getEndTime(TimeUnit.MILLISECONDS),
                                     "unit" to unit.toString()
                             ))
-
-//                            dataSets.forEach { dataSet ->
-//                                dataSet.dataPoints.forEach { point ->
-//                                    val sleepStageVal = point.getValue(Field.FIELD_SLEEP_SEGMENT_TYPE).asInt()
-//                                    val segmentStart = point.getStartTime(TimeUnit.MILLISECONDS)
-//                                    val segmentEnd = point.getEndTime(TimeUnit.MILLISECONDS)
-//                                    val durationMillis = segmentEnd - segmentStart
-//
-//
-//
-//                                    healthData.add(hashMapOf(
-//                                            "value" to durationMillis,
-//                                            "date_from" to segmentStart,
-//                                            "date_to" to segmentEnd,
-//                                            "unit" to unit.toString()
-//                                    ))
-//
-////                                    when (sleepStageVal){
-////                                        SleepStages.SLEEP -> {
-////                                            val segmentStart = point.getStartTime(TimeUnit.MILLISECONDS)
-////                                            val segmentEnd = point.getEndTime(TimeUnit.MILLISECONDS)
-////                                            val durationMillis = segmentEnd - segmentStart
-////
-////                                            healthData.add(hashMapOf(
-////                                                    "value" to durationMillis,
-////                                                    "date_from" to segmentStart,
-////                                                    "date_to" to segmentEnd,
-////                                                    "unit" to unit.toString()
-////                                            ))
-////                                        }
-////                                        SleepStages.AWAKE -> {}
-////                                        SleepStages.SLEEP_LIGHT -> {}
-////                                    }
-//                                }
-//                            }
                         }
                     }
                     activity.runOnUiThread { result.success(healthData) }
@@ -260,30 +220,39 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
             }
         } else {
             Log.d("FLUTTER_HEALTH", "Other data type")
-            /// Start a new thread for doing a GoogleFit data lookup - using a Fitness History Client
             thread {
                 try {
                     val fitnessOptions = FitnessOptions.builder().addDataType(dataType).build()
                     val googleSignInAccount = GoogleSignIn.getAccountForExtension(activity.applicationContext, fitnessOptions)
+
+                    val request = DataReadRequest.Builder()
+                            .aggregate(dataType)
+                            .enableServerQueries()
+                            .bucketByTime(1, TimeUnit.DAYS)
+                            .setTimeRange(startTime, endTime, TimeUnit.MILLISECONDS)
+                            .build()
+
                     val response = Fitness.getHistoryClient(activity.applicationContext, googleSignInAccount)
-                            .readData(DataReadRequest.Builder()
-                                    .read(dataType)
-                                    .setTimeRange(startTime, endTime, TimeUnit.MILLISECONDS)
-                                    .build())
+                            .readData(request)
 
-                    /// Fetch all data points for the specified DataType
-                    val dataPoints = Tasks.await<DataReadResponse>(response).getDataSet(dataType)
+                    response.addOnSuccessListener {
+                        val healthData = it.buckets
+                                .flatMap { it.dataSets }
+                                .flatMap { it.dataPoints }
+                                .mapIndexed { _, dataPoint ->
+                                    return@mapIndexed hashMapOf(
+                                            "value" to getHealthDataValue(dataPoint, unit),
+                                            "date_from" to dataPoint.getStartTime(TimeUnit.MILLISECONDS),
+                                            "date_to" to dataPoint.getEndTime(TimeUnit.MILLISECONDS),
+                                            "unit" to unit.toString())
+                                }
 
-                    /// For each data point, extract the contents and send them to Flutter, along with date and unit.
-                    val healthData = dataPoints.dataPoints.mapIndexed { _, dataPoint ->
-                        return@mapIndexed hashMapOf(
-                                "value" to getHealthDataValue(dataPoint, unit),
-                                "date_from" to dataPoint.getStartTime(TimeUnit.MILLISECONDS),
-                                "date_to" to dataPoint.getEndTime(TimeUnit.MILLISECONDS),
-                                "unit" to unit.toString()
-                        )
+                        activity.runOnUiThread { result.success(healthData) }
+                    }.addOnFailureListener {
+                        Log.d("FLUTTER_HEALTH", "$it")
+                        activity.runOnUiThread { result.success(null) }
                     }
-                    activity.runOnUiThread { result.success(healthData) }
+
                 } catch (e3: Exception) {
                     Log.d("FLUTTER_HEALTH", "$e3")
                     activity.runOnUiThread { result.success(null) }
