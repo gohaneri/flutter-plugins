@@ -121,12 +121,32 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
                     var data = [NSDictionary]()
                     r.statistics().forEach({s in
 
-                        data.append([
-                            "uuid": "\(UUID())",
-                            "value": s.sumQuantity()?.doubleValue(for: HKUnit.count()),
-                            "date_from": Int(s.startDate.timeIntervalSince1970 * 1000),
-                            "date_to": Int(s.endDate.timeIntervalSince1970 * 1000),
-                        ])
+                        if let v = s.sumQuantity() {
+
+                           if v.is(compatibleWith: HKUnit.count()) {
+
+                                data.append([
+                                    "uuid": "\(UUID())",
+                                    "value": v.doubleValue(for: HKUnit.count()),
+                                    "date_from": Int(s.startDate.timeIntervalSince1970 * 1000),
+                                    "date_to": Int(s.endDate.timeIntervalSince1970 * 1000),
+                                ])
+
+                           }
+
+                            if v.is(compatibleWith: HKUnit.minute()){
+
+                                data.append([
+                                    "uuid": "\(UUID())",
+                                    "value": v.doubleValue(for: HKUnit.minute()),
+                                    "date_from": Int(s.startDate.timeIntervalSince1970 * 1000),
+                                    "date_to": Int(s.endDate.timeIntervalSince1970 * 1000),
+                                ])
+
+                            }
+
+                        }
+
                     })
                     print(data)
                     result(data)
@@ -183,7 +203,7 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
 
     func dataTypeLookUp(key: String) -> HKQuantityType {
         guard let dataType_ = dataTypesDict[key] else {
-            return HKObjectType.quantityType(forIdentifier: .bodyMass)!
+            return HKObjectType.quantityType(forIdentifier: .stepCount)!
         }
         return dataType_
     }

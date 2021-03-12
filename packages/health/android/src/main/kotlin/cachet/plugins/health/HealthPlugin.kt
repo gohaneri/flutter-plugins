@@ -1,23 +1,24 @@
 package cachet.plugins.health
 
 import android.app.Activity
+import android.content.Intent
+import android.os.Handler
+import android.util.Log
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.fitness.Fitness
+import com.google.android.gms.fitness.FitnessActivities
 import com.google.android.gms.fitness.FitnessOptions
-import com.google.android.gms.fitness.request.DataReadRequest
 import com.google.android.gms.fitness.data.*
+import com.google.android.gms.fitness.request.DataReadRequest
 import com.google.android.gms.fitness.request.SessionReadRequest
 import com.google.android.gms.fitness.result.SessionReadResponse
 import com.google.android.gms.tasks.Tasks
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
-import io.flutter.plugin.common.PluginRegistry.Registrar
+import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.PluginRegistry.ActivityResultListener
-import android.content.Intent
-import android.os.Handler
-import android.util.Log
-import com.google.android.gms.fitness.FitnessActivities
+import io.flutter.plugin.common.PluginRegistry.Registrar
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
