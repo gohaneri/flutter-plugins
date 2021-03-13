@@ -67,8 +67,13 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
 
         /// Handle getData
         else if (call.method.elementsEqual("getData")){
-            getQuantityData(call: call, result: result)
-            getCategoryData(call: call, result: result)
+            let arguments = call.arguments as? NSDictionary
+            let dataTypeKey = (arguments?["dataTypeKey"] as? String) ?? "DEFAULT"
+            if(dataTypeKey == "SLEEP_IN_BED" || dataTypeKey == "SLEEP_ASLEEP" || dataTypeKey == "SLEEP_AWAKE"){
+                getCategoryData(call: call, result: result)
+            }else{
+                getQuantityData(call: call, result: result)
+            }
         }
     }
 
@@ -110,12 +115,10 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
 
         let dataType = dataTypeLookUp(key: dataTypeKey)
 
-        let predicate = HKQuery.predicateForSamples(withStart: dateFrom, end: dateTo, options: [])
-
         var interval = DateComponents()
         interval.day = 1
 
-        let query = HKStatisticsCollectionQuery.init(quantityType: dataType, quantitySamplePredicate: nil, options: [HKStatisticsOptions.cumulativeSum], anchorDate: dateTo, intervalComponents: interval)
+        let query = HKStatisticsCollectionQuery.init(quantityType: dataType, quantitySamplePredicate: nil, options: [HKStatisticsOptions.cumulativeSum], anchorDate: dateFrom, intervalComponents: interval)
 
         query.initialResultsHandler = { query, results, error in
             if error != nil {
@@ -128,27 +131,14 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
                 r.enumerateStatistics(from: dateFrom, to: dateTo) { (result, stop) in
                     if let v = result.sumQuantity() {
 
-                        if v.is(compatibleWith: HKUnit.count()) {
-
-                            data.append([
-                                "dataType":dataTypeKey,
-                                "uuid": "\(UUID())",
-                                "value": result.sumQuantity()?.doubleValue(for: HKUnit.count()) ?? 0,
-                                "date_from": Int(result.startDate.timeIntervalSince1970 * 1000),
-                                "date_to": Int(result.endDate.timeIntervalSince1970 * 1000),
-                            ])
-
-                        }else if v.is(compatibleWith: HKUnit.minute()){
-
-                            data.append([
-                                "dataType":dataTypeKey,
-                                "uuid": "\(UUID())",
-                                "value": result.sumQuantity()?.doubleValue(for: HKUnit.minute()) ?? 0,
-                                "date_from": Int(result.startDate.timeIntervalSince1970 * 1000),
-                                "date_to": Int(result.endDate.timeIntervalSince1970 * 1000),
-                            ])
-
-                        }
+                        let unit = self.unitLookUp(key: dataTypeKey)
+                        data.append([
+                            "dataType":dataTypeKey,
+                            "uuid": "\(UUID())",
+                            "value": result.sumQuantity()?.doubleValue(for: unit) ?? 0,
+                            "date_from": Int(result.startDate.timeIntervalSince1970 * 1000),
+                            "date_to": Int(result.endDate.timeIntervalSince1970 * 1000),
+                        ])
                     }
                 }
                 print(data)
@@ -169,49 +159,27 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
         // Convert dates from milliseconds to Date()
         let dateFrom = Date(timeIntervalSince1970: startDate.doubleValue / 1000)
         let dateTo = Date(timeIntervalSince1970: endDate.doubleValue / 1000)
-
         let dataType = dataTypeLookUpSleep(key: dataTypeKey)
-        let predicate = HKQuery.predicateForSamples(withStart: dateFrom, end: dateTo, options: [])
-        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: true)
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+        let yesterday = HKQuery.predicateForSamples(withStart: dateFrom, end: dateTo, options: [])
+        let query = HKSampleQuery(sampleType: dataType, predicate: yesterday, limit: HKObjectQueryNoLimit, sortDescriptors: [sortDescriptor]) { x, samplesOrNil, error in
 
-        let query = HKSampleQuery(sampleType: dataType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sortDescriptor]) {
-              x, samplesOrNil, error in
-              guard let samples = samplesOrNil as? [HKQuantitySample] else {
-                guard let samplesCategory = samplesOrNil as? [HKCategorySample] else {
-                  result(FlutterError(code: "FlutterHealth", message: "Results are null", details: "\(error!)"))
-                  return
+            var data = [NSDictionary]()
+            if let result = samplesOrNil {
+                print(result.count)
+                for item in result {
+                    if let sample = item as? HKCategorySample {
+                        data.append([
+                            "uuid": "\(sample.uuid)",
+                            "value": sample.value,
+                            "date_from": Int(sample.startDate.timeIntervalSince1970 * 1000),
+                            "date_to": Int(sample.endDate.timeIntervalSince1970 * 1000),
+                        ])
+                    }
                 }
-                result(samplesCategory.map { sample -> NSDictionary in
-                  let unit = self.unitLookUp(key: dataTypeKey)
-                  var v = sample.value;
-                  if(dataTypeKey == self.SLEEP_AWAKE || dataTypeKey == self.SLEEP_ASLEEP || dataTypeKey == self.SLEEP_IN_BED){
-                    v = Int(sample.endDate.timeIntervalSince1970) - Int(sample.startDate.timeIntervalSince1970)
-                  }
-                  return [
-                    "uuid": "\(sample.uuid)",
-                    "value": v,
-                    "date_from": Int(sample.startDate.timeIntervalSince1970 * 1000),
-                    "date_to": Int(sample.endDate.timeIntervalSince1970 * 1000),
-                  ]
-                })
-                return
-              }
-              result(samples.map { sample -> NSDictionary in
-                let unit = self.unitLookUp(key: dataTypeKey)
-                var v = sample.quantity.doubleValue(for: unit)
-                if(dataTypeKey == self.SLEEP_AWAKE || dataTypeKey == self.SLEEP_ASLEEP || dataTypeKey == self.SLEEP_IN_BED){
-                  v = Double(Int(sample.endDate.timeIntervalSince1970) - Int(sample.startDate.timeIntervalSince1970))
-                }
-                return [
-                  "uuid": "\(sample.uuid)",
-                  "value": v,
-                  "date_from": Int(sample.startDate.timeIntervalSince1970 * 1000),
-                  "date_to": Int(sample.endDate.timeIntervalSince1970 * 1000),
-                ]
-              })
-              return
             }
-
+            result(data)
+        }
         HKHealthStore().execute(query)
     }
 
