@@ -85,6 +85,7 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
         for key in types {
             let keyString = "\(key)"
             typesToRequest.insert(dataTypeLookUp(key: keyString))
+            typesToRequest.insert(dataTypeLookUpSleep(key: keyString))
         }
 
         if #available(iOS 11.0, *) {
@@ -108,12 +109,13 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
         let dateTo = Date(timeIntervalSince1970: endDate.doubleValue / 1000)
 
         let dataType = dataTypeLookUp(key: dataTypeKey)
+
         let predicate = HKQuery.predicateForSamples(withStart: dateFrom, end: dateTo, options: [])
 
         var interval = DateComponents()
         interval.day = 1
 
-        let query = HKStatisticsCollectionQuery(quantityType: dataType, quantitySamplePredicate: predicate, options: [.cumulativeSum], anchorDate: dateFrom as Date, intervalComponents:interval)
+        let query = HKStatisticsCollectionQuery.init(quantityType: dataType, quantitySamplePredicate: nil, options: [HKStatisticsOptions.cumulativeSum], anchorDate: dateTo, intervalComponents: interval)
 
         query.initialResultsHandler = { query, results, error in
             if error != nil {
@@ -123,35 +125,33 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
 
             if let r = results {
                 var data = [NSDictionary]()
-                r.statistics().forEach({s in
-
-                    if let v = s.sumQuantity() {
+                r.enumerateStatistics(from: dateFrom, to: dateTo) { (result, stop) in
+                    if let v = result.sumQuantity() {
 
                         if v.is(compatibleWith: HKUnit.count()) {
 
-                            print(v)
                             data.append([
+                                "dataType":dataTypeKey,
                                 "uuid": "\(UUID())",
-                                "value": v.doubleValue(for: HKUnit.count()),
-                                "date_from": Int(s.startDate.timeIntervalSince1970 * 1000),
-                                "date_to": Int(s.endDate.timeIntervalSince1970 * 1000),
+                                "value": result.sumQuantity()?.doubleValue(for: HKUnit.count()) ?? 0,
+                                "date_from": Int(result.startDate.timeIntervalSince1970 * 1000),
+                                "date_to": Int(result.endDate.timeIntervalSince1970 * 1000),
                             ])
 
                         }else if v.is(compatibleWith: HKUnit.minute()){
 
-                            print(v)
                             data.append([
+                                "dataType":dataTypeKey,
                                 "uuid": "\(UUID())",
-                                "value": v.doubleValue(for: HKUnit.minute()),
-                                "date_from": Int(s.startDate.timeIntervalSince1970 * 1000),
-                                "date_to": Int(s.endDate.timeIntervalSince1970 * 1000),
+                                "value": result.sumQuantity()?.doubleValue(for: HKUnit.minute()) ?? 0,
+                                "date_from": Int(result.startDate.timeIntervalSince1970 * 1000),
+                                "date_to": Int(result.endDate.timeIntervalSince1970 * 1000),
                             ])
 
                         }
-
                     }
-
-                })
+                }
+                print(data)
                 result(data)
                 return
             }
@@ -187,7 +187,6 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
                   if(dataTypeKey == self.SLEEP_AWAKE || dataTypeKey == self.SLEEP_ASLEEP || dataTypeKey == self.SLEEP_IN_BED){
                     v = Int(sample.endDate.timeIntervalSince1970) - Int(sample.startDate.timeIntervalSince1970)
                   }
-                  print("\(dataTypeKey) \(v)")
                   return [
                     "uuid": "\(sample.uuid)",
                     "value": v,
@@ -203,7 +202,6 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
                 if(dataTypeKey == self.SLEEP_AWAKE || dataTypeKey == self.SLEEP_ASLEEP || dataTypeKey == self.SLEEP_IN_BED){
                   v = Double(Int(sample.endDate.timeIntervalSince1970) - Int(sample.startDate.timeIntervalSince1970))
                 }
-                print("\(dataTypeKey) \(v)")
                 return [
                   "uuid": "\(sample.uuid)",
                   "value": v,
