@@ -26,6 +26,9 @@ const val GOOGLE_FIT_PERMISSIONS_REQUEST_CODE = 1111
 
 class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodCallHandler, ActivityResultListener, Result {
 
+
+    private var TAG = "HealthPlugin";
+
     private var result: Result? = null
     private var handler: Handler? = null
 
@@ -42,9 +45,10 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
     private var BLOOD_GLUCOSE = "BLOOD_GLUCOSE"
     private var MOVE_MINUTES = "MOVE_MINUTES"
     private var DISTANCE_DELTA = "DISTANCE_DELTA"
-    private var SLEEP_IN_BED = "SLEEP_IN_BED"
-    private var SLEEP_ASLEEP = "SLEEP_ASLEEP"
+    private var SLEEP = "SLEEP"
     private var SLEEP_AWAKE = "SLEEP_AWAKE"
+    private var SLEEP_DEEP = "SLEEP_DEEP"
+    private var SLEEP_LIGHT = "SLEEP_LIGHT"
 
     companion object {
         @JvmStatic
@@ -71,8 +75,10 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
             .addDataType(keyToHealthDataType(BLOOD_GLUCOSE), FitnessOptions.ACCESS_READ)
             .addDataType(keyToHealthDataType(MOVE_MINUTES), FitnessOptions.ACCESS_READ)
             .addDataType(keyToHealthDataType(DISTANCE_DELTA), FitnessOptions.ACCESS_READ)
-            .addDataType(keyToHealthDataType(SLEEP_IN_BED), FitnessOptions.ACCESS_READ)
-            .addDataType(keyToHealthDataType(SLEEP_ASLEEP), FitnessOptions.ACCESS_READ)
+            .addDataType(keyToHealthDataType(SLEEP), FitnessOptions.ACCESS_READ)
+            .addDataType(keyToHealthDataType(SLEEP_AWAKE), FitnessOptions.ACCESS_READ)
+            .addDataType(keyToHealthDataType(SLEEP_DEEP), FitnessOptions.ACCESS_READ)
+            .addDataType(keyToHealthDataType(SLEEP_LIGHT), FitnessOptions.ACCESS_READ)
             .addDataType(keyToHealthDataType(SLEEP_AWAKE), FitnessOptions.ACCESS_READ)
             .build()
 
@@ -124,7 +130,7 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
             BLOOD_GLUCOSE -> HealthDataTypes.TYPE_BLOOD_GLUCOSE
             MOVE_MINUTES -> DataType.TYPE_MOVE_MINUTES
             DISTANCE_DELTA -> DataType.TYPE_DISTANCE_DELTA
-            SLEEP_IN_BED, SLEEP_ASLEEP, SLEEP_AWAKE -> DataType.TYPE_SLEEP_SEGMENT
+            SLEEP, SLEEP_AWAKE, SLEEP_DEEP, SLEEP_LIGHT -> DataType.TYPE_SLEEP_SEGMENT
             else -> DataType.TYPE_STEP_COUNT_DELTA
         }
     }
@@ -144,7 +150,7 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
             BLOOD_GLUCOSE -> HealthFields.FIELD_BLOOD_GLUCOSE_LEVEL
             MOVE_MINUTES -> Field.FIELD_DURATION
             DISTANCE_DELTA -> Field.FIELD_DISTANCE
-            SLEEP_IN_BED, SLEEP_ASLEEP, SLEEP_AWAKE -> Field.FIELD_SLEEP_SEGMENT_TYPE
+            SLEEP, SLEEP_AWAKE, SLEEP_DEEP, SLEEP_LIGHT, SLEEP_AWAKE -> Field.FIELD_SLEEP_SEGMENT_TYPE
             else -> Field.FIELD_PERCENTAGE
         }
     }
@@ -177,86 +183,130 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
         val unit = getUnit(type)
 
         if (dataType == DataType.TYPE_SLEEP_SEGMENT) {
-            Log.d("FLUTTER_HEALTH", "Sleep data type")
-            thread {
-                try {
-
-                    val fitnessOptions = FitnessOptions.builder().addDataType(dataType).build()
-                    val googleSignInAccount = GoogleSignIn.getAccountForExtension(activity.applicationContext, fitnessOptions)
-
-                    val request = SessionReadRequest.Builder()
-                            .read(DataType.TYPE_SLEEP_SEGMENT)
-                            .setTimeInterval(startTime, endTime, TimeUnit.MILLISECONDS)
-                            .includeSleepSessions()
-                            .readSessionsFromAllApps()
-                            .build()
-
-                    val response = Fitness.getSessionsClient(activity.applicationContext, googleSignInAccount)
-                            .readSession(request)
-
-                    // Get a list of the sessions that match the criteria to check the result.
-                    val sessions: List<Session> = Tasks.await<SessionReadResponse>(response).sessions
-
-                    val healthData: MutableList<HashMap<String, Any>> = mutableListOf()
-
-                    sessions.forEach { session ->
-                        response.result?.getDataSet(session)?.let { dataSets ->
-
-                            healthData.add(hashMapOf(
-                                    "value" to (session.getEndTime(TimeUnit.MILLISECONDS) - session.getStartTime(TimeUnit.MILLISECONDS)),
-                                    "date_from" to session.getStartTime(TimeUnit.MILLISECONDS),
-                                    "date_to" to session.getEndTime(TimeUnit.MILLISECONDS),
-                                    "unit" to unit.toString()
-                            ))
-                        }
-                    }
-                    activity.runOnUiThread { result.success(healthData) }
-                } catch (e3: Exception) {
-                    Log.d("FLUTTER_HEALTH", "$e3")
-                    activity.runOnUiThread { result.success(null) }
-                }
-            }
+            Log.d("FLUTTER_HEALTH", "Sleep data")
+            getSleepData(result, type, dataType, startTime, endTime, unit)
         } else {
-            Log.d("FLUTTER_HEALTH", "Other data type")
-            thread {
-                try {
-                    val fitnessOptions = FitnessOptions.builder().addDataType(dataType).build()
-                    val googleSignInAccount = GoogleSignIn.getAccountForExtension(activity.applicationContext, fitnessOptions)
+            Log.d("FLUTTER_HEALTH", "Other data")
+            getOtherData(result, dataType, startTime, endTime, unit)
+        }
+    }
 
-                    val request = DataReadRequest.Builder()
-                            .aggregate(dataType)
-                            .enableServerQueries()
-                            .bucketByTime(1, TimeUnit.DAYS)
-                            .setTimeRange(startTime, endTime, TimeUnit.MILLISECONDS)
-                            .build()
+    private fun getSleepData(result: Result, type: String, dataType: DataType, startTime: Long, endTime: Long, unit: Field) {
+        thread {
+            try {
 
-                    val response = Fitness.getHistoryClient(activity.applicationContext, googleSignInAccount)
-                            .readData(request)
+                val healthData: MutableList<HashMap<String, Any>> = mutableListOf()
 
-                    response.addOnSuccessListener {
-                        val healthData = it.buckets
-                                .flatMap { it.dataSets }
-                                .flatMap { it.dataPoints }
-                                .mapIndexed { _, dataPoint ->
-                                    return@mapIndexed hashMapOf(
-                                            "value" to getHealthDataValue(dataPoint, unit),
-                                            "date_from" to dataPoint.getStartTime(TimeUnit.MILLISECONDS),
-                                            "date_to" to dataPoint.getEndTime(TimeUnit.MILLISECONDS),
-                                            "unit" to unit.toString())
+                val fitnessOptions = FitnessOptions.builder().addDataType(dataType).build()
+                val googleSignInAccount = GoogleSignIn.getAccountForExtension(activity.applicationContext, fitnessOptions)
+
+                val request = SessionReadRequest.Builder()
+                        .read(DataType.TYPE_SLEEP_SEGMENT)
+                        .setTimeInterval(startTime, endTime, TimeUnit.MILLISECONDS)
+                        .includeSleepSessions()
+                        .readSessionsFromAllApps()
+                        .build()
+
+                val sessionClient = Fitness.getSessionsClient(activity.applicationContext, googleSignInAccount)
+
+                sessionClient.readSession(request)
+                        .addOnSuccessListener { response ->
+                            response.sessions.forEach { session ->
+
+                                if (getSleepType(2) == type) {
+                                    healthData.add(hashMapOf(
+                                            "value" to (session.getEndTime(TimeUnit.MILLISECONDS) - session.getStartTime(TimeUnit.MILLISECONDS)),
+                                            "date_from" to session.getStartTime(TimeUnit.MILLISECONDS),
+                                            "date_to" to session.getEndTime(TimeUnit.MILLISECONDS),
+                                            "unit" to unit.toString(),
+                                            "type" to getSleepType(2)
+                                    ))
                                 }
 
-                        activity.runOnUiThread { result.success(healthData) }
-                    }.addOnFailureListener {
-                        Log.d("FLUTTER_HEALTH", "$it")
-                        activity.runOnUiThread { result.success(null) }
-                    }
+                                val dataSets = response.getDataSet(session)
 
-                } catch (e3: Exception) {
-                    Log.d("FLUTTER_HEALTH", "$e3")
-                    activity.runOnUiThread { result.success(null) }
-                }
+                                if (dataSets.isNotEmpty()) {
+                                    for (dataSet in dataSets) {
+                                        for (point in dataSet.dataPoints) {
+                                            val sleepStageVal = point.getValue(Field.FIELD_SLEEP_SEGMENT_TYPE).asInt()
+
+                                            if (getSleepType(sleepStageVal) == type) {
+                                                healthData.add(hashMapOf(
+                                                        "value" to (point.getEndTime(TimeUnit.MILLISECONDS) - point.getStartTime(TimeUnit.MILLISECONDS)),
+                                                        "date_from" to point.getStartTime(TimeUnit.MILLISECONDS),
+                                                        "date_to" to point.getEndTime(TimeUnit.MILLISECONDS),
+                                                        "unit" to unit.toString(),
+                                                        "type" to getSleepType(sleepStageVal)
+                                                ))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            activity.runOnUiThread { result.success(healthData) }
+                        }
+                        .addOnFailureListener {
+                            Log.d("FLUTTER_HEALTH", "$it")
+                            activity.runOnUiThread { result.success(null) }
+                        }
+
+            } catch (e3: Exception) {
+                Log.d("FLUTTER_HEALTH", "$e3")
+                activity.runOnUiThread { result.success(null) }
             }
         }
+    }
+
+    private fun getOtherData(result: Result, dataType: DataType, startTime: Long, endTime: Long, unit: Field) {
+        thread {
+            try {
+                val fitnessOptions = FitnessOptions.builder().addDataType(dataType).build()
+                val googleSignInAccount = GoogleSignIn.getAccountForExtension(activity.applicationContext, fitnessOptions)
+
+                val request = DataReadRequest.Builder()
+                        .aggregate(dataType)
+                        .enableServerQueries()
+                        .bucketByTime(1, TimeUnit.DAYS)
+                        .setTimeRange(startTime, endTime, TimeUnit.MILLISECONDS)
+                        .build()
+
+                val response = Fitness.getHistoryClient(activity.applicationContext, googleSignInAccount)
+                        .readData(request)
+
+                response.addOnSuccessListener {
+                    val healthData = it.buckets
+                            .flatMap { it.dataSets }
+                            .flatMap { it.dataPoints }
+                            .mapIndexed { _, dataPoint ->
+                                return@mapIndexed hashMapOf(
+                                        "value" to getHealthDataValue(dataPoint, unit),
+                                        "date_from" to dataPoint.getStartTime(TimeUnit.MILLISECONDS),
+                                        "date_to" to dataPoint.getEndTime(TimeUnit.MILLISECONDS),
+                                        "unit" to unit.toString())
+                            }
+
+                    activity.runOnUiThread { result.success(healthData) }
+                }.addOnFailureListener {
+                    Log.d("FLUTTER_HEALTH", "$it")
+                    activity.runOnUiThread { result.success(null) }
+                }
+
+            } catch (e3: Exception) {
+                Log.d("FLUTTER_HEALTH", "$e3")
+                activity.runOnUiThread { result.success(null) }
+            }
+        }
+    }
+
+    private fun getSleepType(type: Int): String {
+        when (type) {
+            1 -> return SLEEP_AWAKE
+            2 -> return SLEEP
+            4 -> return SLEEP_LIGHT
+            5 -> return SLEEP_DEEP
+        }
+        return ""
     }
 
     private fun callToHealthTypes(call: MethodCall): FitnessOptions {
@@ -297,18 +347,6 @@ class HealthPlugin(val activity: Activity, val channel: MethodChannel) : MethodC
             "requestAuthorization" -> requestAuthorization(call, result)
             "getData" -> getData(call, result)
             else -> result.notImplemented()
-        }
-    }
-
-    // because this value is private field in Session
-    fun Session.getValue(): Int {
-        return when (this.activity) {
-            FitnessActivities.SLEEP -> 72
-            FitnessActivities.SLEEP_LIGHT -> 109
-            FitnessActivities.SLEEP_DEEP -> 110
-            FitnessActivities.SLEEP_REM -> 111
-            FitnessActivities.SLEEP_AWAKE -> 112
-            else -> throw Exception("session ${this.activity} is not supported")
         }
     }
 }
