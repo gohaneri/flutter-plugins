@@ -377,124 +377,200 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
         let dateFrom = Date(timeIntervalSince1970: startTime.doubleValue / 1000)
         let dateTo = Date(timeIntervalSince1970: endTime.doubleValue / 1000)
         
+        let newDateFrom = Calendar.current.date(from: Calendar.current.dateComponents([.year, .month, .day], from: dateFrom))!
+
         let dataType = dataTypeLookUp(key: dataTypeKey)
         
         let predicate = HKQuery.predicateForSamples(withStart: dateFrom, end: dateTo, options: .strictStartDate)
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
         
-        let query = HKSampleQuery(sampleType: dataType, predicate: predicate, limit: limit, sortDescriptors: [sortDescriptor]) { [self]
-            x, samplesOrNil, error in
+        if(dataType == HKSampleType.quantityType(forIdentifier: .stepCount)){
+            var interval = DateComponents()
+            interval.day = 1
             
-            switch samplesOrNil {
-            case let (samples as [HKQuantitySample]) as Any:
-                let unit = unitDict[dataUnitKey!]
-                let dictionaries = samples.map { sample -> NSDictionary in
-                    return [
-                        "uuid": "\(sample.uuid)",
-                        "value": sample.quantity.doubleValue(for: unit!),
-                        "date_from": Int(sample.startDate.timeIntervalSince1970 * 1000),
-                        "date_to": Int(sample.endDate.timeIntervalSince1970 * 1000),
-                        "source_id": sample.sourceRevision.source.bundleIdentifier,
-                        "source_name": sample.sourceRevision.source.name
-                    ]
+            let query = HKStatisticsCollectionQuery.init(quantityType: HKObjectType.quantityType(forIdentifier: .stepCount)!, quantitySamplePredicate: nil, options: [HKStatisticsOptions.cumulativeSum], anchorDate: newDateFrom, intervalComponents: interval)
+            
+            query.initialResultsHandler = { query, results, error in
+                if error != nil {
+                    result(FlutterError(code: "FlutterHealth", message: "Results are null", details: "\(error!)"))
+                    return
                 }
-                DispatchQueue.main.async {
-                    result(dictionaries)
-                }
-                
-            case var (samplesCategory as [HKCategorySample]) as Any:
-                if (dataTypeKey == self.SLEEP_IN_BED) {
-                    samplesCategory = samplesCategory.filter { $0.value == 0 }
-                }
-                if (dataTypeKey == self.SLEEP_ASLEEP) {
-                    samplesCategory = samplesCategory.filter { $0.value == 1 }
-                }
-                if (dataTypeKey == self.SLEEP_AWAKE) {
-                    samplesCategory = samplesCategory.filter { $0.value == 2 }
-                }
-                if (dataTypeKey == self.HEADACHE_UNSPECIFIED) {
-                    samplesCategory = samplesCategory.filter { $0.value == 0 }
-                }
-                if (dataTypeKey == self.HEADACHE_NOT_PRESENT) {
-                    samplesCategory = samplesCategory.filter { $0.value == 1 }
-                }
-                if (dataTypeKey == self.HEADACHE_MILD) {
-                    samplesCategory = samplesCategory.filter { $0.value == 2 }
-                }
-                if (dataTypeKey == self.HEADACHE_MODERATE) {
-                    samplesCategory = samplesCategory.filter { $0.value == 3 }
-                }
-                if (dataTypeKey == self.HEADACHE_SEVERE) {
-                    samplesCategory = samplesCategory.filter { $0.value == 4 }
-                }
-                let categories = samplesCategory.map { sample -> NSDictionary in
-                    return [
-                        "uuid": "\(sample.uuid)",
-                        "value": sample.value,
-                        "date_from": Int(sample.startDate.timeIntervalSince1970 * 1000),
-                        "date_to": Int(sample.endDate.timeIntervalSince1970 * 1000),
-                        "source_id": sample.sourceRevision.source.bundleIdentifier,
-                        "source_name": sample.sourceRevision.source.name
-                    ]
-                }
-                DispatchQueue.main.async {
-                    result(categories)
-                }
-                
-            case let (samplesWorkout as [HKWorkout]) as Any:
-                
-                let dictionaries = samplesWorkout.map { sample -> NSDictionary in
-                    return [
-                        "uuid": "\(sample.uuid)",
-                        "workoutActivityType": workoutActivityTypeMap.first(where: {$0.value == sample.workoutActivityType})?.key,
-                        "totalEnergyBurned": sample.totalEnergyBurned?.doubleValue(for: HKUnit.kilocalorie()),
-                        "totalEnergyBurnedUnit": "KILOCALORIE",
-                        "totalDistance": sample.totalDistance?.doubleValue(for: HKUnit.meter()),
-                        "totalDistanceUnit": "METER",
-                        "date_from": Int(sample.startDate.timeIntervalSince1970 * 1000),
-                        "date_to": Int(sample.endDate.timeIntervalSince1970 * 1000),
-                        "source_id": sample.sourceRevision.source.bundleIdentifier,
-                        "source_name": sample.sourceRevision.source.name
-                    ]
-                }
-                
-                DispatchQueue.main.async {
-                    result(dictionaries)
-                }
-                
-            case let (samplesAudiogram as [HKAudiogramSample]) as Any:
-                let dictionaries = samplesAudiogram.map { sample -> NSDictionary in
-                    var frequencies = [Double]()
-                    var leftEarSensitivities = [Double]()
-                    var rightEarSensitivities = [Double]()
-                    for samplePoint in sample.sensitivityPoints {
-                        frequencies.append(samplePoint.frequency.doubleValue(for: HKUnit.hertz()))
-                        leftEarSensitivities.append(samplePoint.leftEarSensitivity!.doubleValue(for: HKUnit.decibelHearingLevel()))
-                        rightEarSensitivities.append(samplePoint.rightEarSensitivity!.doubleValue(for: HKUnit.decibelHearingLevel()))
+    
+                if let r = results {
+                    var data = [NSDictionary]()
+                    r.enumerateStatistics(from: dateFrom, to: dateTo) { (result, stop) in
+                        if let v = result.sumQuantity() {
+    
+                            let unit = HKUnit.count()
+                            data.append([
+                                "uuid" : "",
+                                "value": result.sumQuantity()?.doubleValue(for: unit) ?? 0,
+                                "date_from": Int(result.startDate.timeIntervalSince1970 * 1000),
+                                "date_to": Int(result.endDate.timeIntervalSince1970 * 1000),
+                                "source_id":"",
+                                "source_name":""
+                            ])
+                        }
                     }
-                    return [
-                        "uuid": "\(sample.uuid)",
-                        "frequencies": frequencies,
-                        "leftEarSensitivities": leftEarSensitivities,
-                        "rightEarSensitivities": rightEarSensitivities,
-                        "date_from": Int(sample.startDate.timeIntervalSince1970 * 1000),
-                        "date_to": Int(sample.endDate.timeIntervalSince1970 * 1000),
-                        "source_id": sample.sourceRevision.source.bundleIdentifier,
-                        "source_name": sample.sourceRevision.source.name
-                    ]
-                }
-                DispatchQueue.main.async {
-                    result(dictionaries)
-                }
-                
-            default:
-                DispatchQueue.main.async {
-                    result(nil)
+                    result(data)
+                    return
                 }
             }
+    
+            HKHealthStore().execute(query)
+    
+        }else if(dataType == HKSampleType.quantityType(forIdentifier: .distanceWalkingRunning)){
+            var interval = DateComponents()
+            interval.day = 1
+            
+            let query = HKStatisticsCollectionQuery.init(quantityType: HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)!, quantitySamplePredicate: nil, options: [HKStatisticsOptions.cumulativeSum], anchorDate: newDateFrom, intervalComponents: interval)
+            
+            query.initialResultsHandler = { query, results, error in
+                if error != nil {
+                    result(FlutterError(code: "FlutterHealth", message: "Results are null", details: "\(error!)"))
+                    return
+                }
+    
+                if let r = results {
+                    var data = [NSDictionary]()
+                    r.enumerateStatistics(from: dateFrom, to: dateTo) { (result, stop) in
+                        if let v = result.sumQuantity() {
+    
+                            let unit = HKUnit.mile()
+                            data.append([
+                                "uuid" : "",
+                                "value": result.sumQuantity()?.doubleValue(for: unit) ?? 0,
+                                "date_from": Int(result.startDate.timeIntervalSince1970 * 1000),
+                                "date_to": Int(result.endDate.timeIntervalSince1970 * 1000),
+                                "source_id":"",
+                                "source_name":""
+                            ])
+                        }
+                    }
+                    result(data)
+                    return
+                }
+            }
+    
+            HKHealthStore().execute(query)
+    
+        }else{
+            
+            let query = HKSampleQuery(sampleType: dataType, predicate: predicate, limit: limit, sortDescriptors: [sortDescriptor]) { [self]
+                x, samplesOrNil, error in
+                
+                switch samplesOrNil {
+                case let (samples as [HKQuantitySample]) as Any:
+                    let unit = unitDict[dataUnitKey!]
+                    let dictionaries = samples.map { sample -> NSDictionary in
+                        return [
+                            "uuid": "\(sample.uuid)",
+                            "value": sample.quantity.doubleValue(for: unit!),
+                            "date_from": Int(sample.startDate.timeIntervalSince1970 * 1000),
+                            "date_to": Int(sample.endDate.timeIntervalSince1970 * 1000),
+                            "source_id": sample.sourceRevision.source.bundleIdentifier,
+                            "source_name": sample.sourceRevision.source.name
+                        ]
+                    }
+                    DispatchQueue.main.async {
+                        result(dictionaries)
+                    }
+                    
+                case var (samplesCategory as [HKCategorySample]) as Any:
+                    if (dataTypeKey == self.SLEEP_IN_BED) {
+                        samplesCategory = samplesCategory.filter { $0.value == 0 }
+                    }
+                    if (dataTypeKey == self.SLEEP_ASLEEP) {
+                        samplesCategory = samplesCategory.filter { $0.value == 1 }
+                    }
+                    if (dataTypeKey == self.SLEEP_AWAKE) {
+                        samplesCategory = samplesCategory.filter { $0.value == 2 }
+                    }
+                    if (dataTypeKey == self.HEADACHE_UNSPECIFIED) {
+                        samplesCategory = samplesCategory.filter { $0.value == 0 }
+                    }
+                    if (dataTypeKey == self.HEADACHE_NOT_PRESENT) {
+                        samplesCategory = samplesCategory.filter { $0.value == 1 }
+                    }
+                    if (dataTypeKey == self.HEADACHE_MILD) {
+                        samplesCategory = samplesCategory.filter { $0.value == 2 }
+                    }
+                    if (dataTypeKey == self.HEADACHE_MODERATE) {
+                        samplesCategory = samplesCategory.filter { $0.value == 3 }
+                    }
+                    if (dataTypeKey == self.HEADACHE_SEVERE) {
+                        samplesCategory = samplesCategory.filter { $0.value == 4 }
+                    }
+                    let categories = samplesCategory.map { sample -> NSDictionary in
+                        return [
+                            "uuid": "\(sample.uuid)",
+                            "value": sample.value,
+                            "date_from": Int(sample.startDate.timeIntervalSince1970 * 1000),
+                            "date_to": Int(sample.endDate.timeIntervalSince1970 * 1000),
+                            "source_id": sample.sourceRevision.source.bundleIdentifier,
+                            "source_name": sample.sourceRevision.source.name
+                        ]
+                    }
+                    DispatchQueue.main.async {
+                        result(categories)
+                    }
+                    
+                case let (samplesWorkout as [HKWorkout]) as Any:
+                    
+                    let dictionaries = samplesWorkout.map { sample -> NSDictionary in
+                        return [
+                            "uuid": "\(sample.uuid)",
+                            "workoutActivityType": workoutActivityTypeMap.first(where: {$0.value == sample.workoutActivityType})?.key,
+                            "totalEnergyBurned": sample.totalEnergyBurned?.doubleValue(for: HKUnit.kilocalorie()),
+                            "totalEnergyBurnedUnit": "KILOCALORIE",
+                            "totalDistance": sample.totalDistance?.doubleValue(for: HKUnit.meter()),
+                            "totalDistanceUnit": "METER",
+                            "date_from": Int(sample.startDate.timeIntervalSince1970 * 1000),
+                            "date_to": Int(sample.endDate.timeIntervalSince1970 * 1000),
+                            "source_id": sample.sourceRevision.source.bundleIdentifier,
+                            "source_name": sample.sourceRevision.source.name
+                        ]
+                    }
+                    
+                    DispatchQueue.main.async {
+                        result(dictionaries)
+                    }
+                    
+                case let (samplesAudiogram as [HKAudiogramSample]) as Any:
+                    let dictionaries = samplesAudiogram.map { sample -> NSDictionary in
+                        var frequencies = [Double]()
+                        var leftEarSensitivities = [Double]()
+                        var rightEarSensitivities = [Double]()
+                        for samplePoint in sample.sensitivityPoints {
+                            frequencies.append(samplePoint.frequency.doubleValue(for: HKUnit.hertz()))
+                            leftEarSensitivities.append(samplePoint.leftEarSensitivity!.doubleValue(for: HKUnit.decibelHearingLevel()))
+                            rightEarSensitivities.append(samplePoint.rightEarSensitivity!.doubleValue(for: HKUnit.decibelHearingLevel()))
+                        }
+                        return [
+                            "uuid": "\(sample.uuid)",
+                            "frequencies": frequencies,
+                            "leftEarSensitivities": leftEarSensitivities,
+                            "rightEarSensitivities": rightEarSensitivities,
+                            "date_from": Int(sample.startDate.timeIntervalSince1970 * 1000),
+                            "date_to": Int(sample.endDate.timeIntervalSince1970 * 1000),
+                            "source_id": sample.sourceRevision.source.bundleIdentifier,
+                            "source_name": sample.sourceRevision.source.name
+                        ]
+                    }
+                    DispatchQueue.main.async {
+                        result(dictionaries)
+                    }
+                    
+                default:
+                    DispatchQueue.main.async {
+                        result(nil)
+                    }
+                }
+            }
+            
+            HKHealthStore().execute(query)
+            
         }
-        
-        HKHealthStore().execute(query)
     }
     
     func getTotalStepsInInterval(call: FlutterMethodCall, result: @escaping FlutterResult) {
