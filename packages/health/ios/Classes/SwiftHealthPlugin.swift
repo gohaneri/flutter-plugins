@@ -376,19 +376,20 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
         // Convert dates from milliseconds to Date()
         let dateFrom = Date(timeIntervalSince1970: startTime.doubleValue / 1000)
         let dateTo = Date(timeIntervalSince1970: endTime.doubleValue / 1000)
-        
-        let newDateFrom = Calendar.current.date(from: Calendar.current.dateComponents([.year, .month, .day], from: dateFrom))!
-
         let dataType = dataTypeLookUp(key: dataTypeKey)
         
-        let predicate = HKQuery.predicateForSamples(withStart: dateFrom, end: dateTo, options: .strictStartDate)
+        let newDateTo2 = Calendar.current.date(bySettingHour: 00, minute: 01, second: 0, of: dateTo)!
+        var newDateFrom2 = Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: dateFrom)!
+        newDateFrom2 = Calendar.current.date(byAdding: .hour, value: 2, to: newDateFrom2)!
+
+        let predicate = HKQuery.predicateForSamples(withStart: newDateFrom2, end: newDateTo2, options: .strictStartDate)
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
         
         if(dataType == HKSampleType.quantityType(forIdentifier: .stepCount)){
             var interval = DateComponents()
             interval.day = 1
             
-            let query = HKStatisticsCollectionQuery.init(quantityType: HKObjectType.quantityType(forIdentifier: .stepCount)!, quantitySamplePredicate: nil, options: [HKStatisticsOptions.cumulativeSum], anchorDate: newDateFrom, intervalComponents: interval)
+            let query = HKStatisticsCollectionQuery.init(quantityType: HKObjectType.quantityType(forIdentifier: .stepCount)!, quantitySamplePredicate: nil, options: [HKStatisticsOptions.cumulativeSum], anchorDate: newDateFrom2, intervalComponents: interval)
             
             query.initialResultsHandler = { query, results, error in
                 if error != nil {
@@ -400,7 +401,7 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
                     var data = [NSDictionary]()
                     r.enumerateStatistics(from: dateFrom, to: dateTo) { (result, stop) in
                         if let v = result.sumQuantity() {
-    
+                            
                             let unit = HKUnit.count()
                             data.append([
                                 "uuid" : "",
@@ -423,7 +424,7 @@ public class SwiftHealthPlugin: NSObject, FlutterPlugin {
             var interval = DateComponents()
             interval.day = 1
             
-            let query = HKStatisticsCollectionQuery.init(quantityType: HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)!, quantitySamplePredicate: nil, options: [HKStatisticsOptions.cumulativeSum], anchorDate: newDateFrom, intervalComponents: interval)
+            let query = HKStatisticsCollectionQuery.init(quantityType: HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)!, quantitySamplePredicate: nil, options: [HKStatisticsOptions.cumulativeSum], anchorDate: newDateFrom2, intervalComponents: interval)
             
             query.initialResultsHandler = { query, results, error in
                 if error != nil {
